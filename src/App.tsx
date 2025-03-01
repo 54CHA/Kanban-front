@@ -5,6 +5,7 @@ import TaskForm from './components/TaskForm';
 import { saveTasksToLocalStorage, getTasksFromLocalStorage } from './utils';
 import { Plus, CheckSquare, ChevronRight } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 
 interface TaskPath {
   id: string;
@@ -126,6 +127,52 @@ function App() {
     return (currentTasks || []).filter(task => task.status === status);
   };
 
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    // Drop outside any droppable area
+    if (!destination) return;
+
+    // Drop in the same position
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    const task = currentTasks.find(t => t.id === draggableId);
+    if (!task) return;
+
+    // Create a new array of tasks without the dragged task
+    const newTasks = currentTasks.filter(t => t.id !== draggableId);
+
+    // Update task status if moved to a different column
+    if (destination.droppableId !== source.droppableId) {
+      task.status = destination.droppableId as Status;
+    }
+
+    // Get tasks of the destination status
+    const destinationTasks = getTasksByStatus(destination.droppableId as Status);
+    
+    // Insert the task at the new position
+    destinationTasks.splice(destination.index, 0, task);
+
+    // Update the tasks state
+    if (currentTaskPath.length === 0) {
+      setTasks([...newTasks, task]);
+      setCurrentTasks([...newTasks, task]);
+    } else {
+      const lastTask = currentTaskPath[currentTaskPath.length - 1];
+      const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (t) => ({
+        ...t,
+        subTasks: [...newTasks, task],
+      }));
+      setTasks(updatedTasks);
+      setCurrentTasks([...newTasks, task]);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="container mx-auto py-6 px-4">
@@ -176,40 +223,42 @@ function App() {
           </Dialog.Root>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <TaskColumn
-              title="Backlog"
-              status="backlog"
-              tasks={getTasksByStatus('backlog')}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onNavigateToSubtasks={handleNavigateToSubtasks}
-            />
+        <DragDropContext onDragEnd={handleDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-8rem)]">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <TaskColumn
+                title="Backlog"
+                status="backlog"
+                tasks={getTasksByStatus('backlog')}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                onNavigateToSubtasks={handleNavigateToSubtasks}
+              />
+            </div>
+            
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <TaskColumn
+                title="Active"
+                status="active"
+                tasks={getTasksByStatus('active')}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                onNavigateToSubtasks={handleNavigateToSubtasks}
+              />
+            </div>
+            
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+              <TaskColumn
+                title="Finished"
+                status="finished"
+                tasks={getTasksByStatus('finished')}
+                onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
+                onNavigateToSubtasks={handleNavigateToSubtasks}
+              />
+            </div>
           </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <TaskColumn
-              title="Active"
-              status="active"
-              tasks={getTasksByStatus('active')}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onNavigateToSubtasks={handleNavigateToSubtasks}
-            />
-          </div>
-          
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <TaskColumn
-              title="Finished"
-              status="finished"
-              tasks={getTasksByStatus('finished')}
-              onUpdateTask={handleUpdateTask}
-              onDeleteTask={handleDeleteTask}
-              onNavigateToSubtasks={handleNavigateToSubtasks}
-            />
-          </div>
-        </div>
+        </DragDropContext>
       </main>
     </div>
   );

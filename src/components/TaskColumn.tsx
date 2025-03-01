@@ -1,6 +1,7 @@
 import React from 'react';
 import { Task, Status } from '../types';
 import TaskCard from './TaskCard';
+import { Droppable, Draggable } from '@hello-pangea/dnd';
 
 interface TaskColumnProps {
   title: string;
@@ -34,24 +35,45 @@ const TaskColumn: React.FC<TaskColumnProps> = ({
         </span>
       </div>
       
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {sortedTasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onUpdateTask={onUpdateTask}
-            onDeleteTask={onDeleteTask}
-            onNavigateToSubtasks={onNavigateToSubtasks}
-          />
-        ))}
-        
-        {tasks.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-sm text-gray-500">No tasks yet</p>
-            <p className="text-xs text-gray-400 mt-1">Add a new task to get started</p>
+      <Droppable droppableId={status}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`flex-1 overflow-y-auto p-4 space-y-4 ${
+              snapshot.isDraggingOver ? 'bg-gray-50' : ''
+            }`}
+          >
+            {sortedTasks.map((task, index) => (
+              <Draggable key={task.id} draggableId={task.id} index={index}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.draggableProps}
+                    {...provided.dragHandleProps}
+                    className={`${snapshot.isDragging ? 'opacity-50' : ''}`}
+                  >
+                    <TaskCard
+                      task={task}
+                      onUpdateTask={onUpdateTask}
+                      onDeleteTask={onDeleteTask}
+                      onNavigateToSubtasks={onNavigateToSubtasks}
+                    />
+                  </div>
+                )}
+              </Draggable>
+            ))}
+            {provided.placeholder}
+            
+            {tasks.length === 0 && !snapshot.isDraggingOver && (
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-500">No tasks yet</p>
+                <p className="text-xs text-gray-400 mt-1">Add a new task to get started</p>
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </Droppable>
     </div>
   );
 };
