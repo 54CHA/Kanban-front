@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Task, Status } from './types';
 import TaskColumn from './components/TaskColumn';
 import TaskForm from './components/TaskForm';
-import { saveTasksToLocalStorage, getTasksFromLocalStorage } from './utils';
 import { Plus, CheckSquare, ChevronRight } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { api } from './services/api';
 
 interface TaskPath {
   id: string;
@@ -17,34 +17,53 @@ function App() {
   const [showAddTaskForm, setShowAddTaskForm] = useState(false);
   const [currentTaskPath, setCurrentTaskPath] = useState<TaskPath[]>([]);
   const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedTasks = getTasksFromLocalStorage();
-    if (savedTasks.length > 0) {
-      setTasks(savedTasks);
-      setCurrentTasks(savedTasks);
-    }
+    loadTasks();
   }, []);
 
-  useEffect(() => {
-    saveTasksToLocalStorage(tasks);
-  }, [tasks]);
-
-  const handleAddTask = (newTask: Task) => {
-    if (currentTaskPath.length === 0) {
-      const updatedTasks = [...tasks, newTask];
-      setTasks(updatedTasks);
-      setCurrentTasks(updatedTasks);
-    } else {
-      const lastTask = currentTaskPath[currentTaskPath.length - 1];
-      const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
-        ...task,
-        subTasks: [...(task.subTasks || []), { ...newTask, id: `${task.id}-${Date.now()}` }],
-      }));
-      setTasks(updatedTasks);
-      setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+  const loadTasks = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const fetchedTasks = await api.getTasks();
+      setTasks(fetchedTasks);
+      setCurrentTasks(fetchedTasks);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to load tasks: ${errorMessage}`);
+      console.error('Error loading tasks:', err);
+    } finally {
+      setIsLoading(false);
     }
-    setShowAddTaskForm(false);
+  };
+
+  const handleAddTask = async (newTask: Omit<Task, 'id'>) => {
+    try {
+      setError(null);
+      if (currentTaskPath.length === 0) {
+        const createdTask = await api.createTask(newTask);
+        const updatedTasks = [...tasks, createdTask];
+        setTasks(updatedTasks);
+        setCurrentTasks(updatedTasks);
+      } else {
+        const lastTask = currentTaskPath[currentTaskPath.length - 1];
+        const createdSubtask = await api.createSubtask(lastTask.id, newTask);
+        const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
+          ...task,
+          subTasks: [...(task.subTasks || []), createdSubtask],
+        }));
+        setTasks(updatedTasks);
+        setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+      }
+      setShowAddTaskForm(false);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to create task: ${errorMessage}`);
+      console.error('Error creating task:', err);
+    }
   };
 
   const updateTasksRecursively = (taskList: Task[], taskId: string, updateFn: (task: Task) => Task): Task[] => {
@@ -74,52 +93,84 @@ function App() {
     return current;
   };
 
-  const handleUpdateTask = (updatedTask: Task) => {
-    if (currentTaskPath.length === 0) {
-      const updatedTasks = tasks.map(task => task.id === updatedTask.id ? updatedTask : task);
-      setTasks(updatedTasks);
-      setCurrentTasks(updatedTasks);
-    } else {
-      const lastTask = currentTaskPath[currentTaskPath.length - 1];
-      const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
-        ...task,
-        subTasks: (task.subTasks || []).map(st => st.id === updatedTask.id ? updatedTask : st),
-      }));
-      setTasks(updatedTasks);
-      setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+  const handleUpdateTask = async (updatedTask: Task) => {
+    try {
+      setError(null);
+      await api.updateTask(updatedTask);
+      if (currentTaskPath.length === 0) {
+        const updatedTasks = tasks.map(task => task.id === updatedTask.id ? updatedTask : task);
+        setTasks(updatedTasks);
+        setCurrentTasks(updatedTasks);
+      } else {
+        const lastTask = currentTaskPath[currentTaskPath.length - 1];
+        const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
+          ...task,
+          subTasks: (task.subTasks || []).map(st => st.id === updatedTask.id ? updatedTask : st),
+        }));
+        setTasks(updatedTasks);
+        setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to update task: ${errorMessage}`);
+      console.error('Error updating task:', err);
     }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    if (currentTaskPath.length === 0) {
-      const updatedTasks = tasks.filter(task => task.id !== taskId);
-      setTasks(updatedTasks);
-      setCurrentTasks(updatedTasks);
-    } else {
-      const lastTask = currentTaskPath[currentTaskPath.length - 1];
-      const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
-        ...task,
-        subTasks: (task.subTasks || []).filter(st => st.id !== taskId),
-      }));
-      setTasks(updatedTasks);
-      setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      setError(null);
+      await api.deleteTask(taskId);
+      if (currentTaskPath.length === 0) {
+        const updatedTasks = tasks.filter(task => task.id !== taskId);
+        setTasks(updatedTasks);
+        setCurrentTasks(updatedTasks);
+      } else {
+        const lastTask = currentTaskPath[currentTaskPath.length - 1];
+        const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (task) => ({
+          ...task,
+          subTasks: (task.subTasks || []).filter(st => st.id !== taskId),
+        }));
+        setTasks(updatedTasks);
+        setCurrentTasks(getTasksByPath(updatedTasks, currentTaskPath));
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to delete task: ${errorMessage}`);
+      console.error('Error deleting task:', err);
     }
   };
 
-  const handleNavigateToSubtasks = (task: Task) => {
-    const newPath = [...currentTaskPath, { id: task.id, title: task.title }];
-    setCurrentTaskPath(newPath);
-    setCurrentTasks(task.subTasks || []);
-  };
-
-  const handleNavigateToBreadcrumb = (index: number) => {
-    if (index === -1) {
-      setCurrentTaskPath([]);
-      setCurrentTasks(tasks);
-    } else {
-      const newPath = currentTaskPath.slice(0, index + 1);
+  const handleNavigateToSubtasks = async (task: Task) => {
+    try {
+      setError(null);
+      const subtasks = await api.getSubtasks(task.id);
+      const newPath = [...currentTaskPath, { id: task.id, title: task.title }];
       setCurrentTaskPath(newPath);
-      setCurrentTasks(getTasksByPath(tasks, newPath));
+      setCurrentTasks(subtasks);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to load subtasks: ${errorMessage}`);
+      console.error('Error loading subtasks:', err);
+    }
+  };
+
+  const handleNavigateToBreadcrumb = async (index: number) => {
+    try {
+      if (index === -1) {
+        const rootTasks = await api.getTasks();
+        setCurrentTaskPath([]);
+        setCurrentTasks(rootTasks);
+      } else {
+        const newPath = currentTaskPath.slice(0, index + 1);
+        const lastTask = newPath[newPath.length - 1];
+        const subtasks = await api.getSubtasks(lastTask.id);
+        setCurrentTaskPath(newPath);
+        setCurrentTasks(subtasks);
+      }
+    } catch (err) {
+      setError('Failed to navigate. Please try again.');
+      console.error('Error navigating:', err);
     }
   };
 
@@ -127,55 +178,62 @@ function App() {
     return (currentTasks || []).filter(task => task.status === status);
   };
 
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
 
-    // Drop outside any droppable area
     if (!destination) return;
-
-    // Drop in the same position
-    if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
-    ) {
-      return;
-    }
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
 
     const task = currentTasks.find(t => t.id === draggableId);
     if (!task) return;
 
-    // Create a new array of tasks without the dragged task
-    const newTasks = currentTasks.filter(t => t.id !== draggableId);
+    try {
+      const updatedTask = {
+        ...task,
+        status: destination.droppableId as Status,
+      };
 
-    // Update task status if moved to a different column
-    if (destination.droppableId !== source.droppableId) {
-      task.status = destination.droppableId as Status;
-    }
+      await api.updateTask(updatedTask);
 
-    // Get tasks of the destination status
-    const destinationTasks = getTasksByStatus(destination.droppableId as Status);
-    
-    // Insert the task at the new position
-    destinationTasks.splice(destination.index, 0, task);
+      const newTasks = currentTasks.filter(t => t.id !== draggableId);
+      const destinationTasks = getTasksByStatus(destination.droppableId as Status);
+      destinationTasks.splice(destination.index, 0, updatedTask);
 
-    // Update the tasks state
-    if (currentTaskPath.length === 0) {
-      setTasks([...newTasks, task]);
-      setCurrentTasks([...newTasks, task]);
-    } else {
-      const lastTask = currentTaskPath[currentTaskPath.length - 1];
-      const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (t) => ({
-        ...t,
-        subTasks: [...newTasks, task],
-      }));
-      setTasks(updatedTasks);
-      setCurrentTasks([...newTasks, task]);
+      if (currentTaskPath.length === 0) {
+        setTasks([...newTasks, updatedTask]);
+        setCurrentTasks([...newTasks, updatedTask]);
+      } else {
+        const lastTask = currentTaskPath[currentTaskPath.length - 1];
+        const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (t) => ({
+          ...t,
+          subTasks: [...newTasks, updatedTask],
+        }));
+        setTasks(updatedTasks);
+        setCurrentTasks([...newTasks, updatedTask]);
+      }
+    } catch (err) {
+      setError('Failed to update task status. Please try again.');
+      console.error('Error updating task status:', err);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading tasks...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="container mx-auto py-6 px-4">
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+            {error}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center text-sm overflow-x-auto">
             <button

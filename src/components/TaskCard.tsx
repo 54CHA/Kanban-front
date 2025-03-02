@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Task, Priority, Status } from '../types';
-import { Trash, Edit, Clock, Calendar, X, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Trash, Edit, Clock, Calendar, X, ChevronDown, ChevronUp, Plus, AlertTriangle } from 'lucide-react';
 import { formatDate } from '../utils';
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -31,6 +31,7 @@ const PriorityBadge: React.FC<{ priority: Priority }> = ({ priority = 'medium' }
 const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdateTask, onDeleteTask, onNavigateToSubtasks }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editedTask, setEditedTask] = useState<Task>({
     ...task,
     subTasks: task.subTasks || [],
@@ -48,6 +49,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdateTask, onDeleteTask, o
   const handleCancelEdit = () => {
     setEditedTask({ ...task, subTasks: task.subTasks || [] });
     setIsEditing(false);
+  };
+
+  const handleDeleteConfirm = () => {
+    onDeleteTask(task.id);
+    setShowDeleteConfirm(false);
   };
 
   // Ensure subTasks is always an array
@@ -186,6 +192,44 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdateTask, onDeleteTask, o
         </Dialog.Portal>
       </Dialog.Root>
       
+      <Dialog.Root open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-2rem)] sm:w-full max-w-md bg-white rounded-lg shadow-lg">
+            <div className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+                  <AlertTriangle size={20} className="text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <Dialog.Title className="text-lg font-semibold text-gray-900">
+                    Delete Task
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm text-gray-500">
+                    Are you sure you want to delete "{task.title}"? This action cannot be undone and will remove all subtasks.
+                  </Dialog.Description>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="w-full sm:w-auto px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  className="w-full sm:w-auto px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  Delete Task
+                </button>
+              </div>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <div className="divide-y divide-gray-100">
         <div className="p-4">
           <div className="flex justify-between items-start gap-4">
@@ -246,7 +290,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdateTask, onDeleteTask, o
                 <Plus size={16} />
               </button>
               <button
-                onClick={() => onDeleteTask(task.id)}
+                onClick={() => setShowDeleteConfirm(true)}
                 className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-gray-100 rounded transition-colors"
                 title="Delete Task"
               >
@@ -259,13 +303,13 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onUpdateTask, onDeleteTask, o
         {isExpanded && (
           <div className="animate-in fade-in slide-in-from-top-1 duration-200">
             {task.description && (
-              <div className="px-4 py-3 bg-gray-50">
+              <div className="px-4 py-3 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">{task.description}</p>
               </div>
             )}
             
             {subTasks.length > 0 && (
-              <div className="px-4 py-3">
+              <div className="px-4 py-3 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-sm font-medium text-gray-900">Subtasks</h4>
                   <button

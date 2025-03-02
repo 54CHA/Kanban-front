@@ -4,7 +4,7 @@ import { X, Calendar, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucid
 import * as Dialog from '@radix-ui/react-dialog';
 
 interface TaskFormProps {
-  onAddTask: (task: Task) => void;
+  onAddTask: (task: Omit<Task, 'id'>) => void;
   onClose: () => void;
 }
 
@@ -21,8 +21,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, onClose }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newTask: Task = {
-      id: Date.now().toString(),
+    const newTask: Omit<Task, 'id'> = {
       title: title.trim(),
       description: description.trim(),
       priority: priority || 'medium',
