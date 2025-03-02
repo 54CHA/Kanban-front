@@ -188,31 +188,41 @@ function App() {
     if (!task) return;
 
     try {
+      // Create a copy of the current tasks
+      const newTasks = [...currentTasks];
+      
+      // Find and remove the task from its current position
+      const taskIndex = newTasks.findIndex(t => t.id === draggableId);
+      const [removedTask] = newTasks.splice(taskIndex, 1);
+      
+      // Create updated task with new status
       const updatedTask = {
-        ...task,
+        ...removedTask,
         status: destination.droppableId as Status,
       };
 
-      await api.updateTask(updatedTask);
+      // Insert the task at its new position
+      const tasksInDestination = newTasks.filter(t => t.status === destination.droppableId);
+      const insertIndex = newTasks.findIndex(t => t.status === destination.droppableId) + destination.index;
+      newTasks.splice(insertIndex, 0, updatedTask);
 
-      const newTasks = currentTasks.filter(t => t.id !== draggableId);
-      const destinationTasks = getTasksByStatus(destination.droppableId as Status);
-      destinationTasks.splice(destination.index, 0, updatedTask);
-
+      // Update the UI immediately
       if (currentTaskPath.length === 0) {
-        setTasks([...newTasks, updatedTask]);
-        setCurrentTasks([...newTasks, updatedTask]);
-      } else {
-        const lastTask = currentTaskPath[currentTaskPath.length - 1];
-        const updatedTasks = updateTasksRecursively(tasks, lastTask.id, (t) => ({
-          ...t,
-          subTasks: [...newTasks, updatedTask],
-        }));
-        setTasks(updatedTasks);
-        setCurrentTasks([...newTasks, updatedTask]);
+        setTasks(newTasks);
       }
+      setCurrentTasks(newTasks);
+
+      // Make the API call
+      await api.updateTask(updatedTask);
     } catch (err) {
-      setError('Failed to update task status. Please try again.');
+      // If the API call fails, revert to the original state
+      if (currentTaskPath.length === 0) {
+        setTasks([...tasks]);
+      }
+      setCurrentTasks([...currentTasks]);
+      
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+      setError(`Failed to update task status: ${errorMessage}`);
       console.error('Error updating task status:', err);
     }
   };
